@@ -4,14 +4,14 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
     <script type="text/javascript">
 
-    var keyword = "mountains";
+    var keyword = "boston skyline";
 
     $(document).ready(function(){
 
         $.getJSON("http://api.flickr.com/services/feeds/photos_public.gne?jsoncallback=?",
         {
             tags: keyword,
-            tagmode: "any",
+            tagmode: "all",
             format: "json"
         },
         function(data) {
