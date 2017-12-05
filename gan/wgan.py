@@ -21,7 +21,7 @@ class WGAN:
       return K.mean(y_true * y_pred)
 
 
-  def __init__(self):
+  def __init__(self, batch_size=32):
     '''
     '''
     self._image_size = None
@@ -31,7 +31,7 @@ class WGAN:
     self._clip_value = 0.01
     self._optimizer = keras.optimizers.RMSprop(lr=0.00005)
 
-    self._batch_size = 32
+    self._batch_size = batch_size
     self._epochs = 4000
     self._save_image_interval = 50
 
@@ -68,6 +68,54 @@ class WGAN:
     self.N.compile(loss=WGAN.loss, optimizer=self._optimizer, metrics=['accuracy'])
 
     # self.N.summary()
+
+  def train_from_flickrama(self, flickrama):
+    '''
+    '''
+
+    for epoch in range(self._epochs):
+
+      for _ in range(self._n_critic):
+
+        # ---------------------
+        #  Train Discriminator
+        # ---------------------
+
+        imgs = np.random.permutation(flickrama.next(epoch))
+
+        half_batch = len(imgs)
+
+        noise = np.random.normal(0, 1, (half_batch, self._generator._noise_size[0]))
+
+        # Generate a half batch of new images
+        gen_imgs = self._generator.N.predict(noise)
+
+        # Train the discriminator
+        d_loss_real = self._discriminator.N.train_on_batch(imgs, -np.ones((half_batch, 1)))
+        d_loss_fake = self._discriminator.N.train_on_batch(gen_imgs, np.ones((half_batch, 1)))
+        d_loss = 0.5 * np.add(d_loss_fake, d_loss_real)
+
+        # Clip discriminator weights
+        for l in self._discriminator.N.layers:
+            weights = l.get_weights()
+            weights = [np.clip(w, -self._clip_value, self._clip_value) for w in weights]
+            l.set_weights(weights)
+
+
+      # ---------------------
+      #  Train Generator
+      # ---------------------
+
+      noise = np.random.normal(0, 1, (self._batch_size, self._generator._noise_size[0]))
+
+      # Train the generator
+      g_loss = self.N.train_on_batch(noise, -np.ones((self._batch_size, 1)))
+
+      # Plot the progress
+      print "%d [D loss: %f] [G loss: %f]" % (epoch, 1 - d_loss[0], 1 - g_loss[0])
+
+      if epoch % self._save_image_interval == 0:
+          self.store_generated_images(epoch)
 
 
   def train(self, X_train):
@@ -137,5 +185,5 @@ class WGAN:
             axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')
             axs[i,j].axis('off')
             cnt += 1
-    fig.savefig("/tmp/mnist_%d.png" % epoch)
+    fig.savefig("/tmp/test_%d.png" % epoch)
     plt.close()

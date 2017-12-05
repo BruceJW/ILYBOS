@@ -1,11 +1,12 @@
 import flickr_api
 import imageio
 import numpy as np
+import scipy.misc
 import urllib2
 
 class Data:
 
-  def __init__(self, what, size=(240, 240), batch_size=100, flickr_size='Small'):
+  def __init__(self, what, size=(240, 240), batch_size=100, flickr_size='Small', grayscale=False, normalize=False, expand=False, downsample=False):
     '''
     '''
 
@@ -17,29 +18,30 @@ class Data:
     self._page = 1
     self._batch_size = batch_size
 
+    self._grayscale = grayscale
+    self._normalize = normalize
+    self._expand = expand
+    self._downsample = downsample
+
     self._cache = {}
 
 
-  def next_batch(self, page=None):
+  def next(self, page=None):
     '''
     '''
     increase_page = True
-    if not page:
+    if page:
       increase_page = False
+    else:
       page = self._page
-    print 'using page', page
 
     #
     # check if we reached the flickr max
     #
     if self._batch_size * page > self._flickr_max:
+      page -= self._flickr_max
 
-      print 'reset queue'
-      page = 1
-
-
-    at_least_one_cached = False
-
+    print 'using page', page
 
     photos = flickr_api.Photo.search(tags=self._what, \
                                      sort='relevance', \
@@ -52,20 +54,23 @@ class Data:
 
     for p in photos:
 
-      current_id = photos[0]['id']
+      current_id = p['id']
 
       if current_id in self._cache:
-
-        if not at_least_one_cached:
-          print 'use cache at least once'
-
-        at_least_one_cached = True
 
         current_batch.append(self._cache[current_id])
 
       else:
 
-        url = p.getSizes()[self._flickr_size]['source']
+        try:
+          url = p.getSizes()[self._flickr_size]['source']
+        except:
+          # reached the bottom, restart now
+          self._page = 1
+          return current_batch
+
+
+
         img = urllib2.urlopen(url).read()
         img = imageio.imread(img)
 
@@ -77,6 +82,21 @@ class Data:
         
         img = img[:self._size[0],:self._size[1]]
         
+        # normalize
+
+        # grayscale
+        if self._grayscale:
+          img = np.dot(img[...,:3], [0.299, 0.587, 0.114])
+
+          if self._normalize:
+            img = (img.astype(np.float32) - 127.5) / 127.5
+
+          if self._downsample:
+            img = scipy.misc.imresize(img, (28,28))
+
+          if self._expand:
+            img = np.expand_dims(img, axis=2)
+
         self._cache[current_id] = img
 
         current_batch.append(img)
